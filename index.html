@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>📚 플래시카드 학습기</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="공부카드">
+<meta name="mobile-web-app-capable" content="yes">
+
+<style>
+    :root {
+        --primary: #4F46E5;
+        --bg: #F3F4F6;
+        --card-bg: #FFFFFF;
+        --text: #1F2937;
+        --border: #E5E7EB;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        max-width: 600px; /* 모바일 가독성을 위해 너비 최적화 */
+        margin: 0 auto;
+        padding: 16px;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom)); /* 아이폰 하단 바 대응 */
+        -webkit-text-size-adjust: none;
+    }
+
+    /* 탭 메뉴 */
+    .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+    .tab-btn {
+        flex: 1;
+        padding: 14px;
+        background: #E5E7EB;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.2s;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .tab-btn.active {
+        background: var(--primary);
+        color: white;
+    }
+
+    /* 섹션 전환 */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* 공통 폼 스타일 */
+    input, textarea, button {
+        width: 100%;
+        padding: 14px;
+        margin: 6px 0;
+        box-sizing: border-box;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 16px;
+    }
+    textarea { height: 120px; resize: none; }
+    button {
+        background: white;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        font-weight: bold;
+        min-height: 48px; /* 모바일 터치 영역 확보 */
+        -webkit-tap-highlight-color: transparent;
+    }
+    button.primary-btn {
+        background: var(--primary);
+        color: white;
+        border: none;
+    }
+
+    /* 관리 모드 리스트 */
+    .list-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        margin-top: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    .list-card .title { font-weight: bold; font-size: 16px; color: var(--primary); margin-bottom: 8px; }
+    .list-card p { margin: 0 0 12px 0; font-size: 15px; white-space: pre-wrap; line-height: 1.4; }
+    .list-card small { color: #6B7280; font-size: 13px; }
+    .action-btns { display: flex; gap: 8px; margin-top: 12px; }
+
+    /* 플래시카드 학습 모드 (3D 뒤집기) */
+    .flashcard-container {
+        width: 100%;
+        height: 380px; /* 터치하기 넉넉한 높이 */
+        perspective: 1000px;
+        margin-top: 12px;
+    }
+    .flashcard {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        transition: transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1);
+        transform-style: preserve-3d;
+        cursor: pointer;
+        user-select: none; /* 터치 시 텍스트 블록 지정 방지 */
+        -webkit-user-select: none;
+    }
+    .flashcard.is-flipped {
+        transform: rotateY(180deg);
+    }
+    .card-face {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+        border-radius: 20px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        text-align: center;
+    }
+    .card-front {
+        background-color: var(--card-bg);
+        border: 2px solid var(--primary);
+    }
+    .card-front h2 { color: var(--primary); margin: 0 0 10px 0; font-size: 22px; word-break: keep-all; line-height: 1.4; }
+    .card-front small { color: #9CA3AF; margin-top: 24px; font-size: 13px; }
+    
+    .card-back {
+        background-color: var(--primary);
+        color: white;
+        transform: rotateY(180deg);
+    }
+    .card-back p { font-size: 19px; white-space: pre-wrap; margin: 0; line-height: 1.5; word-break: keep-all; }
+    .card-back small { margin-top: 24px; opacity: 0.8; font-size: 13px; }
+
+    /* 학습 컨트롤 */
+    .study-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+        gap: 12px;
+    }
+    .study-controls button {
+        flex: 1;
+        max-width: 120px;
+        padding: 12px;
+        border-radius: 50px;
+        background: var(--card-bg);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    #progress-text { font-weight: bold; color: #4B5563; font-size: 16px; }
+    
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        background: var(--card-bg);
+        border-radius: 20px;
+        color: #6B7280;
+        margin-top: 12px;
+    }
+</style>
+</head>
+
+<body>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('study')">📖 학습 모드</button>
+    <button class="tab-btn" onclick="switchTab('manage')">⚙️ 카드 관리</button>
+</div>
+
+<div id="studySection" class="section active">
+    <div id="studyArea"></div>
+</div>
+
+<div id="manageSection" class="section">
+    <div class="list-card">
+        <h3 style="margin-top:0;">새 카드 작성</h3>
+        <input id="question" placeholder="질문 (예: 과밀억제권역 내 정보처리업 취득세 중과 여부?)" />
+        <textarea id="answer" placeholder="정답 (예: 취득세 중과 제외 업종이다)"></textarea>
+        <input id="source" placeholder="출처 (예: 지방세법)" />
+        <button class="primary-btn" onclick="saveCard()">저장</button>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 16px;">
+        <button onclick="downloadJson()" style="flex: 1;">⬇️ 내보내기</button>
+        <div style="flex: 1; position: relative;">
+            <input type="file" id="importFile" accept=".json" style="position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; left:0; top:0;" />
+            <button style="pointer-events: none; margin:0;">⬆️ 불러오기</button>
+        </div>
+    </div>
+
+    <hr style="border: 0; height: 1px; background: var(--border); margin: 24px 0;">
+    <h3 style="margin-bottom: 8px;">보유 카드 목록 (<span id="totalCardsCount">0</span>장)</h3>
+    <div id="cardList"></div>
+</div>
+
+<script>
+let cards = JSON.parse(localStorage.getItem('flashcards')) || [];
+let editIndex = -1;
+let currentStudyIndex = 0;
+
+// 초기 렌더링
+renderManageList();
+renderStudyCard();
+
+document.getElementById("importFile").addEventListener("change", importJson);
+
+// --- 탭 전환 로직 ---
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+    
+    if(tab === 'study') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('studySection').classList.add('active');
+        renderStudyCard();
+    } else {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('manageSection').classList.add('active');
+        renderManageList();
+    }
+}
+
+// --- 학습 모드 로직 ---
+function renderStudyCard() {
+    const studyArea = document.getElementById("studyArea");
+    
+    if (cards.length === 0) {
+        studyArea.innerHTML = `
+            <div class="empty-state">
+                <h2 style="margin-top:0;">카드가 없습니다!</h2>
+                <p>관리 모드에서 새 카드를 추가하거나 JSON 파일을 불러오세요.</p>
+                <button class="primary-btn" onclick="switchTab('manage')" style="width:auto; margin-top:12px; padding: 10px 20px;">카드 관리로 이동</button>
+            </div>
+        `;
+        return;
+    }
+
+    const card = cards[currentStudyIndex];
+    studyArea.innerHTML = `
+        <div class="flashcard-container">
+            <div class="flashcard" onclick="flipCard(this)">
+                <div class="card-face card-front">
+                    <span style="font-size: 32px; margin-bottom:12px;">🤔</span>
+                    <h2>${card.question}</h2>
+                    <small>👉 터치해서 정답 확인</small>
+                </div>
+                <div class="card-face card-back">
+                    <span style="font-size: 32px; margin-bottom:12px;">💡</span>
+                    <p>${card.answer}</p>
+                    ${card.source ? `<small>출처: ${card.source}</small>` : ''}
+                </div>
+            </div>
+        </div>
+        <div class="study-controls">
+            <button onclick="prevCard()">◀ 이전</button>
+            <span id="progress-text">${currentStudyIndex + 1} / ${cards.length}</span>
+            <button onclick="nextCard()">다음 ▶</button>
+        </div>
+    `;
+}
+
+function flipCard(element) {
+    element.classList.toggle('is-flipped');
+}
+
+function nextCard() {
+    if (currentStudyIndex < cards.length - 1) {
+        currentStudyIndex++;
+        renderStudyCard();
+    }
+}
+
+function prevCard() {
+    if (currentStudyIndex > 0) {
+        currentStudyIndex--;
+        renderStudyCard();
+    }
+}
+
+// --- 관리 모드 로직 ---
+function saveData() {
+    localStorage.setItem('flashcards', JSON.stringify(cards));
+}
+
+function saveCard() {
+    const question = document.getElementById("question").value.trim();
+    const answer = document.getElementById("answer").value.trim();
+    const source = document.getElementById("source").value.trim();
+
+    if(!question || !answer){
+        alert("질문과 정답을 모두 입력해주세요.");
+        return;
+    }
+
+    const card = { question, answer, source };
+
+    if(editIndex === -1){
+        cards.push(card);
+        currentStudyIndex = cards.length - 1; 
+    } else {
+        cards[editIndex] = card;
+        editIndex = -1;
+    }
+
+    saveData();
+    clearForm();
+    renderManageList();
+    alert("카드가 저장되었습니다.");
+}
+
+function renderManageList() {
+    const list = document.getElementById("cardList");
+    document.getElementById("totalCardsCount").innerText = cards.length;
+    list.innerHTML = "";
+
+    cards.forEach((card, index) => {
+        list.innerHTML += `
+        <div class="list-card">
+            <div class="title">Q. ${card.question}</div>
+            <p>A. ${card.answer}</p>
+            ${card.source ? `<small>📖 ${card.source}</small>` : ''}
+            <div class="action-btns">
+                <button onclick="editCard(${index})">✏️ 수정</button>
+                <button onclick="deleteCard(${index})" style="color: #EF4444;">🗑️ 삭제</button>
+            </div>
+        </div>
+        `;
+    });
+}
+
+function editCard(index) {
+    const card = cards[index];
+    document.getElementById("question").value = card.question;
+    document.getElementById("answer").value = card.answer;
+    document.getElementById("source").value = card.source || "";
+    editIndex = index;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function deleteCard(index) {
+    if(confirm("이 카드를 삭제할까요?")) {
+        cards.splice(index, 1);
+        if (currentStudyIndex >= cards.length && currentStudyIndex > 0) {
+            currentStudyIndex--;
+        }
+        saveData();
+        renderManageList();
+    }
+}
+
+function clearForm() {
+    document.getElementById("question").value = "";
+    document.getElementById("answer").value = "";
+    document.getElementById("source").value = "";
+}
+
+function downloadJson() {
+    if(cards.length === 0) {
+        alert("내보낼 카드가 없습니다.");
+        return;
+    }
+    const blob = new Blob([JSON.stringify(cards, null, 2)], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    
+    const date = new Date();
+    const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}`;
+    a.download = `공부카드_${dateStr}.json`;
+    
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function importJson(event) {
+    const file = event.target.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedCards = JSON.parse(e.target.result);
+            if(Array.isArray(importedCards)) {
+                cards = importedCards;
+                currentStudyIndex = 0;
+                saveData();
+                renderManageList();
+                alert(`성공적으로 ${cards.length}개의 카드를 불러왔습니다.`);
+                document.getElementById('importFile').value = '';
+            } else {
+                alert("올바른 JSON 형식이 아닙니다.");
+            }
+        } catch(err) {
+            alert("파일을 읽는 중 오류가 발생했습니다.");
+        }
+    };
+    reader.readAsText(file);
+}
+</script>
+
+</body>
+</html>
